@@ -286,10 +286,20 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   @SubscribeMessage('typing')
   handleTyping(client: Socket, payload: { roomId: string; isTyping: boolean }) {
-    client.to(payload.roomId).emit('typing', {
-      username: client.data.username as string,
-      isTyping: payload.isTyping,
-    });
+    const sender = client.data.username as string;
+    if (payload.roomId.startsWith('dm:')) {
+      const parts = payload.roomId.replace('dm:', '').split('-');
+      const partner = parts[0] === sender ? parts[1] : parts[0];
+      const target = this.findSocketByUsername(partner);
+      if (target) {
+        target.emit('typing', { username: sender, isTyping: payload.isTyping });
+      }
+    } else {
+      client.to(payload.roomId).emit('typing', {
+        username: sender,
+        isTyping: payload.isTyping,
+      });
+    }
   }
 
   @SubscribeMessage('voiceOffer')

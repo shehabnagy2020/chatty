@@ -146,11 +146,16 @@ function AuthScreen({ onLogin, onRegister, loading, error, setError }: {
   const [rememberMe, setRememberMe] = useState(true);
 
   const handleSubmit = async () => {
-    if (!username.trim() || !password) return;
+    // Re-read values from DOM in case autofill didn't trigger React onChange
+    const usernameInput = document.getElementById('auth-username') as HTMLInputElement | null;
+    const passwordInput = document.getElementById('auth-password') as HTMLInputElement | null;
+    const u = (usernameInput?.value || username).trim();
+    const p = passwordInput?.value || password;
+    if (!u || !p) return;
     if (mode === 'login') {
-      await onLogin(username.trim(), password, rememberMe);
+      await onLogin(u, p, rememberMe);
     } else {
-      await onRegister(username.trim(), password, rememberMe);
+      await onRegister(u, p, rememberMe);
     }
   };
 
@@ -176,7 +181,9 @@ function AuthScreen({ onLogin, onRegister, loading, error, setError }: {
               </Alert>
             )}
           </Transition>
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} style={{ width: '100%' }}>
           <TextInput
+            id="auth-username"
             w="100%"
             label="Username"
             placeholder="Enter your username"
@@ -185,11 +192,13 @@ function AuthScreen({ onLogin, onRegister, loading, error, setError }: {
             onChange={(e) => setUsername(e.currentTarget.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
             maxLength={20}
+            autoComplete="username"
             styles={(theme) => ({
               input: { background: theme.colors.dark[6], borderColor: theme.colors.dark[4], transition: 'border-color 0.2s' },
             })}
           />
           <PasswordInput
+            id="auth-password"
             w="100%"
             label="Password"
             placeholder="Enter your password"
@@ -197,10 +206,12 @@ function AuthScreen({ onLogin, onRegister, loading, error, setError }: {
             value={password}
             onChange={(e) => setPassword(e.currentTarget.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit(); }}
+            autoComplete="current-password"
             styles={(theme) => ({
               input: { background: theme.colors.dark[6], borderColor: theme.colors.dark[4], transition: 'border-color 0.2s' },
             })}
           />
+          </form>
           {mode === 'login' && (
             <Checkbox
               label="Remember me"
@@ -753,7 +764,7 @@ function ChatScreen({
             {username}
           </Badge>
           <Tooltip label="Logout">
-            <ActionIcon variant="subtle" color="red" size="sm" onClick={onLogout} style={{ transition: 'transform 0.2s' }}>⏻</ActionIcon>
+            <ActionIcon variant="subtle" color="red" size="sm" onClick={onLogout} style={{ transition: 'transform 0.2s', fontSize: 14 }}>✕</ActionIcon>
           </Tooltip>
         </Group>
       </Group>
@@ -817,13 +828,13 @@ function ChatScreen({
                     </Group>
                   </div>
                 </Group>
-                <Tooltip label="Voice call">
+                <Tooltip label={voiceChat.isUserOnline(dmPartner) ? 'Voice call' : 'User is offline'}>
                   <ActionIcon
                     variant="subtle"
-                    color="violet"
+                    color={voiceChat.isUserOnline(dmPartner) ? 'violet' : 'gray'}
                     size="lg"
                     onClick={() => voiceChat.callUser(dmPartner)}
-                    disabled={voiceChat.inCallWith !== null}
+                    disabled={!voiceChat.isUserOnline(dmPartner) || voiceChat.inCallWith !== null}
                     style={{ transition: 'transform 0.2s' }}
                   >
                     📞
@@ -967,33 +978,79 @@ function ChatScreen({
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >
-        {voiceChat.inCallWith && (
-          <Box px="md" py="xs" className="animate-call-pulse" style={{ background: 'var(--mantine-color-violet-9)' }}>
-            <Group justify="space-between" wrap="nowrap">
-              <Group gap="xs" wrap="nowrap">
-                <Text size="sm" c="white">📞</Text>
-                <Text size="sm" c="white" fw={600}>{voiceChat.inCallWith}</Text>
-                <Text size="sm" c="violet.2">{formatDuration(voiceChat.callDuration)}</Text>
+        {voiceChat.incomingCall && !voiceChat.inCallWith && (
+          <Modal
+            opened
+            onClose={voiceChat.rejectCall}
+            centered={!isMobile}
+            fullScreen={isMobile}
+            withCloseButton={false}
+            padding="xl"
+            styles={{
+              content: {
+                background: 'var(--mantine-color-green-9)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: isMobile ? 0 : 'xl',
+              },
+              inner: { height: isMobile ? '100dvh' : undefined },
+            }}
+          >
+            <Stack align="center" gap="lg">
+              <Avatar color="green" radius="xl" size="lg">
+                {voiceChat.incomingCall.from.charAt(0).toUpperCase()}
+              </Avatar>
+              <Text c="white" fw={700} size={isMobile ? 'xl' : 'lg'}>{voiceChat.incomingCall.from}</Text>
+              <Text c="green.2" size="sm">Incoming call...</Text>
+              <Group gap="md" mt="md">
+                <Button size="lg" color="green" radius="xl" leftSection="📞" onClick={voiceChat.answerCall}>Answer</Button>
+                <Button size="lg" color="red" variant="outline" radius="xl" leftSection="✕" onClick={voiceChat.rejectCall}>Reject</Button>
               </Group>
-              <Group gap="xs" wrap="nowrap">
-                <ActionIcon variant="filled" color={voiceChat.isMuted ? 'red' : 'green'} size="sm" onClick={voiceChat.toggleMute}>
+            </Stack>
+          </Modal>
+        )}
+        {voiceChat.inCallWith && (
+          <Modal
+            opened
+            onClose={voiceChat.hangUp}
+            centered={!isMobile}
+            fullScreen={isMobile}
+            withCloseButton={false}
+            padding="xl"
+            styles={{
+              content: {
+                background: 'var(--mantine-color-violet-9)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: isMobile ? 0 : 'xl',
+              },
+              inner: { height: isMobile ? '100dvh' : undefined },
+            }}
+          >
+            <Stack align="center" gap="lg">
+              <Avatar color="violet" radius="xl" size="lg">
+                {voiceChat.inCallWith.charAt(0).toUpperCase()}
+              </Avatar>
+              <Text c="white" fw={700} size={isMobile ? 'xl' : 'lg'}>{voiceChat.inCallWith}</Text>
+              <Text c="violet.2" size="xl" fw={600}>
+                {voiceChat.callConnected ? formatDuration(voiceChat.callDuration) : 'Calling...'}
+              </Text>
+              <Group gap="md" mt="md">
+                <ActionIcon
+                  variant="filled"
+                  color={voiceChat.isMuted ? 'red' : 'green'}
+                  size="lg"
+                  onClick={voiceChat.toggleMute}
+                  radius="xl"
+                >
                   {voiceChat.isMuted ? '🔇' : '🎤'}
                 </ActionIcon>
-                <Button size="xs" color="red" radius="xl" onClick={voiceChat.hangUp}>Hang up</Button>
+                <Button size="lg" color="red" radius="xl" leftSection="📞" onClick={voiceChat.hangUp}>Hang up</Button>
               </Group>
-            </Group>
-          </Box>
-        )}
-        {voiceChat.incomingCall && !voiceChat.inCallWith && (
-          <Box px="md" py="xs" className="incoming-call-bar" style={{ background: 'var(--mantine-color-green-9)' }}>
-            <Group justify="space-between" wrap="nowrap">
-              <Text size="sm" c="white" lineClamp={1}>📞 {voiceChat.incomingCall.from} is calling</Text>
-              <Group gap="xs" wrap="nowrap">
-                <Button size="xs" color="green" radius="xl" onClick={voiceChat.answerCall}>Answer</Button>
-                <Button size="xs" color="red" variant="outline" radius="xl" onClick={voiceChat.rejectCall}>Reject</Button>
-              </Group>
-            </Group>
-          </Box>
+            </Stack>
+          </Modal>
         )}
         <Group style={{ maxWidth: 900, margin: '0 auto', width: '100%' }} p="xs" gap="xs">
           {recording ? (
@@ -1156,7 +1213,7 @@ function App() {
     sendCallLog, sendImage, sendPrivateImage, onMessageRef, onPrivateMessageRef, getDmHistory, unread, setActiveChannel: setChatActiveChannel,
   } = useChat(socket, authUsername || '');
 
-  const voiceChat = useVoiceChat(socket);
+  const voiceChat = useVoiceChat(socket, onlineUsers);
 
   const [activeChannel, setActiveChannelLocal] = useState('general');
 
