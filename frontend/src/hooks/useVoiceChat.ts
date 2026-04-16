@@ -22,6 +22,7 @@ export function useVoiceChat(socket: Socket | null, onlineUsers: string[]) {
   const [incomingCall, setIncomingCall] = useState<{ from: string; offer: RTCSessionDescriptionInit } | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [callConnected, setCallConnected] = useState(false);
+  const [isCalling, setIsCalling] = useState(false);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -98,6 +99,7 @@ export function useVoiceChat(socket: Socket | null, onlineUsers: string[]) {
     setIsMuted(false);
     setCallDuration(0);
     setCallConnected(false);
+    setIsCalling(false);
     callStartRef.current = 0;
   }, [stopCallTimer]);
 
@@ -157,6 +159,7 @@ export function useVoiceChat(socket: Socket | null, onlineUsers: string[]) {
 
   const callUser = useCallback(async (targetUser: string) => {
     if (!socket || inCallWithRef.current) return;
+    setIsCalling(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       localStreamRef.current = stream;
@@ -169,9 +172,11 @@ export function useVoiceChat(socket: Socket | null, onlineUsers: string[]) {
       socket.emit('voiceOffer', { to: targetUser, offer: enrichedOffer });
       inCallWithRef.current = targetUser;
       setInCallWith(targetUser);
+      setIsCalling(false);
       // Timer will start when ICE connects or when answer is received
     } catch (err) {
       console.error('callUser error:', err);
+      setIsCalling(false);
       cleanup();
     }
   }, [socket, createPeerConnection, cleanup, waitForIceGatheringComplete]);
@@ -353,5 +358,5 @@ export function useVoiceChat(socket: Socket | null, onlineUsers: string[]) {
     };
   }, [cleanup]);
 
-  return { inCallWith, callDuration, callConnected, incomingCall, isMuted, callUser, answerCall, rejectCall, hangUp, toggleMute, isUserOnline, onCallLogRef };
+  return { inCallWith, callDuration, callConnected, incomingCall, isMuted, isCalling, callUser, answerCall, rejectCall, hangUp, toggleMute, isUserOnline, onCallLogRef };
 }

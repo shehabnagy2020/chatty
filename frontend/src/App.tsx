@@ -255,6 +255,7 @@ function Sidebar({
   onOpenCreateRoom,
   dms,
   inCallWith,
+  isCalling,
   onCallUser,
   onNavigate,
   unread,
@@ -268,6 +269,7 @@ function Sidebar({
   onOpenCreateRoom: () => void;
   dms: Set<string>;
   inCallWith: string | null;
+  isCalling: boolean;
   onCallUser: (username: string) => void;
   onNavigate?: () => void;
   unread: Map<string, number>;
@@ -366,15 +368,19 @@ function Sidebar({
                   root: { borderRadius: theme.radius.md, flex: 1, transition: 'all 0.2s ease' },
                 })}
               />
-              <Tooltip label="Voice call">
+              <Tooltip label={isCalling ? 'Calling...' : 'Voice call'}>
                 <ActionIcon
                   variant="subtle"
                   color="violet"
                   size="sm"
                   onClick={(e) => { e.stopPropagation(); onCallUser(user); }}
-                  disabled={inCallWith !== null}
+                  disabled={inCallWith !== null || isCalling}
                 >
-                  📞
+                  {isCalling ? (
+                    <div style={{ width: 12, height: 12, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                  ) : (
+                    '📞'
+                  )}
                 </ActionIcon>
               </Tooltip>
             </Group>
@@ -797,6 +803,7 @@ function ChatScreen({
               onOpenCreateRoom={openCreateRoom}
               dms={dms}
               inCallWith={voiceChat.inCallWith}
+              isCalling={voiceChat.isCalling}
               onCallUser={voiceChat.callUser}
               onNavigate={closeMobileNav}
               unread={unread}
@@ -834,10 +841,14 @@ function ChatScreen({
                     color={voiceChat.isUserOnline(dmPartner) ? 'violet' : 'gray'}
                     size="lg"
                     onClick={() => voiceChat.callUser(dmPartner)}
-                    disabled={!voiceChat.isUserOnline(dmPartner) || voiceChat.inCallWith !== null}
+                    disabled={!voiceChat.isUserOnline(dmPartner) || voiceChat.inCallWith !== null || voiceChat.isCalling}
                     style={{ transition: 'transform 0.2s' }}
                   >
-                    📞
+                    {voiceChat.isCalling ? (
+                      <div style={{ width: 16, height: 16, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                    ) : (
+                      '📞'
+                    )}
                   </ActionIcon>
                 </Tooltip>
               </Group>
