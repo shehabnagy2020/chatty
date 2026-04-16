@@ -14,7 +14,7 @@ import { User } from './auth/entities/user.entity';
     ConfigModule.forRoot({ isGlobal: true }),
     TypeOrmModule.forRoot({
       type: 'better-sqlite3',
-      database: 'chatty.db',
+      database: process.env.DATABASE_PATH || 'chatty.db',
       entities: [Message, Room, User],
       synchronize: true,
     }),

@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: chatty
+    env: node
+    region: oregon
+    plan: free
+    branch: main
+    rootDir: backend
+    buildCommand: npm install && npm run build && cd ../frontend && npm install && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+        sync: false
+      - key: PORT
+        value: 3000
+    disk:
+      name: chatty-data
+      mountPath: /opt/render/project/src
+      sizeGB: 1
