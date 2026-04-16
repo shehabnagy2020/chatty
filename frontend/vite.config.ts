@@ -6,13 +6,14 @@ export default defineConfig({
   server: {
     host: true,
     allowedHosts: true,
+    port: 3000,
     proxy: {
       '/socket.io': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:8000',
         ws: true,
       },
       '/auth': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
     },
