@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import EmojiPicker from 'emoji-picker-react';
 import type { EmojiClickData } from 'emoji-picker-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   Group,
   Badge,
@@ -730,16 +732,18 @@ function ChatScreen({
         }}
       >
         <Group gap="xs">
-          <ActionIcon
-            variant="subtle"
-            color="violet"
-            size="lg"
-            onClick={toggleMobileNav}
-            aria-label="Toggle navigation"
-            style={{ transition: 'transform 0.3s ease', transform: mobileNavOpened ? 'rotate(90deg)' : 'rotate(0deg)' }}
-          >
-            ☰
-          </ActionIcon>
+          {isMobile && (
+            <ActionIcon
+              variant="subtle"
+              color="violet"
+              size="lg"
+              onClick={toggleMobileNav}
+              aria-label="Toggle navigation"
+              style={{ transition: 'transform 0.3s ease', transform: mobileNavOpened ? 'rotate(90deg)' : 'rotate(0deg)' }}
+            >
+              ☰
+            </ActionIcon>
+          )}
           <Text fw={700} size="lg" variant="gradient" gradient={{ from: 'violet', to: 'grape', deg: 135 }}>
             Chatty
           </Text>
@@ -931,9 +935,9 @@ function ChatScreen({
                           />
                         </Box>
                       ) : (
-                        <Text size="sm" c={isOwn ? 'white' : undefined} style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                          {msg.content}
-                        </Text>
+                        <Box size="sm" c={isOwn ? 'white' : undefined} className="chat-markdown" style={{ wordBreak: 'break-word' }}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                        </Box>
                       )}
                     </Paper>
                   </Group>

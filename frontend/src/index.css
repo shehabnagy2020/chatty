@@ -103,6 +103,19 @@ body {
   100% { transform: scale(1); }
 }
 
+.in-call-mode *,
+.in-call-mode *::before,
+.in-call-mode *::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0s !important;
+}
+
+.animate-call-pulse,
+.incoming-call-bar {
+  animation: none !important;
+}
+
 .animate-fade-in-up {
   animation: fadeInUp 0.5s ease-out both;
 }
@@ -202,4 +215,95 @@ body {
   .mobile-full-width {
     width: 100% !important;
   }
+}
+
+.chat-markdown {
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.5;
+}
+
+.chat-markdown p {
+  margin: 0 0 0.5em 0;
+}
+
+.chat-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.chat-markdown pre {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.6em 0.8em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 0.3em 0;
+}
+
+.chat-markdown pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85em;
+}
+
+.chat-markdown blockquote {
+  border-left: 3px solid var(--mantine-color-violet-4);
+  margin: 0.3em 0;
+  padding: 0.2em 0.6em;
+  opacity: 0.85;
+}
+
+.chat-markdown ul, .chat-markdown ol {
+  margin: 0.3em 0;
+  padding-left: 1.5em;
+}
+
+.chat-markdown li {
+  margin: 0.1em 0;
+}
+
+.chat-markdown h1, .chat-markdown h2, .chat-markdown h3 {
+  margin: 0.4em 0 0.2em 0;
+  font-weight: 700;
+}
+
+.chat-markdown h1 { font-size: 1.2em; }
+.chat-markdown h2 { font-size: 1.1em; }
+.chat-markdown h3 { font-size: 1.05em; }
+
+.chat-markdown a {
+  color: var(--mantine-color-violet-3);
+  text-decoration: underline;
+}
+
+.chat-markdown table {
+  border-collapse: collapse;
+  margin: 0.4em 0;
+  font-size: 0.9em;
+}
+
+.chat-markdown th, .chat-markdown td {
+  border: 1px solid var(--mantine-color-dark-3);
+  padding: 0.3em 0.6em;
+}
+
+.chat-markdown th {
+  background: rgba(0, 0, 0, 0.2);
+  font-weight: 600;
+}
+
+.chat-markdown hr {
+  border: none;
+  border-top: 1px solid var(--mantine-color-dark-3);
+  margin: 0.4em 0;
+}
+
+.chat-markdown img {
+  max-width: 100%;
+  border-radius: 6px;
 }
