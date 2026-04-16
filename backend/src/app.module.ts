@@ -19,7 +19,7 @@ import { User } from './auth/entities/user.entity';
       synchronize: true,
     }),
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', '..', 'frontend', 'dist'),
+      rootPath: join(process.cwd(), '..', 'frontend', 'dist'),
       exclude: ['/socket.io/(.*)', '/auth/(.*)'],
     }),
     ChatModule,
