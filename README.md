@@ -1,16 +1,19 @@
 # Chatty
 
-Real-time chat application with user authentication, voice calls, image sharing, and markdown support.
+Real-time chat application with user authentication, voice calls, file sharing, reactions, and markdown support.
 
 ## Features
 
-- **Authentication** — Sign up / sign in with username + password, JWT tokens, "Remember me" option
+- **Authentication** — Sign up / sign in with username + password, JWT tokens, "Remember me" (7d) or session-only (1h)
 - **Room chat** — Create and join chat rooms with member counts and unread badges
 - **Direct messages** — Private messaging with unread counters and online status
+- **@Mentions** — Type `@` to mention users; highlighted with violet pill styling
 - **Markdown** — Messages rendered with full GitHub-flavored markdown (code blocks, tables, lists, etc.)
-- **Image sharing** — Send images from device, click to view fullscreen
-- **Voice messages** — Record and send audio messages with inline playback
+- **Attachments** — Upload photos, videos, or any file via the + menu
+- **Voice messages** — Tap the mic button to record, preview before sending or cancel
 - **Voice calls** — WebRTC 1:1 audio calls with mute, timer, reject, and call logging
+- **Location sharing** — Send your current location with Google Maps link
+- **Reactions** — Hover over a message to react with emoji; reaction pills show counts
 - **Notifications** — Distinct sounds for messages, DMs, calls + tab title flash for unread
 - **Mobile-first** — Responsive design, overlay sidebar, hidden action buttons while typing
 - **Dark theme** — Polished UI with smooth animations
@@ -28,64 +31,38 @@ Real-time chat application with user authentication, voice calls, image sharing,
 
 ### Development
 
-Run backend and frontend separately:
+Runs backend + frontend separately with PM2:
 
 ```bash
-# Backend (port 3000)
-cd backend
-npm install
-npm run start:dev
-
-# Frontend (port 5173)
-cd frontend
-npm install
-npm run dev
+./dev
 ```
 
-Or use the start scripts:
-```bash
-start.cmd      # Windows
-./start.sh     # Unix
-```
-
-The Vite dev server proxies `/socket.io` and `/auth` to the backend.
+Backend on port 8000, frontend on Vite port 3000 (proxies API to backend).
 
 ### Production
 
-Build both and serve everything from NestJS on port 3000:
+Builds both, then serves everything from the backend on port 8000:
 
 ```bash
-cd frontend && npm run build
-cd backend && npm run build
-cd backend && npm run start:prod
+./prod
 ```
 
-Or use the production script:
-```bash
-start-prod.cmd
-```
+NestJS serves the frontend static files from `frontend/dist` via `@nestjs/serve-static`. Only port 8000 is needed — Socket.IO, auth API, and static files all on the same origin.
 
-NestJS serves the frontend static files from `frontend/dist` via `@nestjs/serve-static`. Only port 3000 is needed — Socket.IO, auth API, and static files all on the same origin.
-
-### External Access (ngrok / localtunnel)
-
-To access from other devices or over HTTPS:
+### PM2 Commands
 
 ```bash
-# After starting both dev servers
-npx localtunnel --port 5173
-```
-
-Or with ngrok:
-```bash
-ngrok http 5173
+pm2 logs          # View logs
+pm2 restart all   # Restart
+pm2 stop all      # Stop
+pm2 delete all    # Remove all processes
 ```
 
 ## Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `PORT` | `3000` | Backend server port |
+| `PORT` | `8000` | Backend server port |
 | `JWT_SECRET` | `chatty-secret-key-change-in-production` | JWT signing secret |
 | `VITE_SERVER_URL` | `''` (same-origin) | Frontend API/socket URL |
 
@@ -113,8 +90,9 @@ chatty/
 │       ├── App.tsx          # Auth + Chat screens
 │       ├── types.ts
 │       └── index.css        # Animations + markdown styles
-├── AGENTS.md               # Detailed project memory
-├── start.cmd               # Dev start (Windows)
-├── start.sh                # Dev start (Unix)
-└── start-prod.cmd          # Production build + start
+├── dev                     # Dev mode (PM2, backend + frontend separate)
+├── prod                    # Build & production mode (PM2, backend serves all on :8000)
+├── ecosystem.config.cjs    # PM2 dev config
+├── ecosystem.prod.config.cjs # PM2 prod config
+└── AGENTS.md               # Detailed project memory
 ```

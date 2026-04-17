@@ -709,35 +709,39 @@ function ChatScreen({
     activeChannelRef.current = activeChannel;
   }, [activeChannel]);
 
-  useEffect(() => {
+  const scrollToBottom = useCallback(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const isNearBottom = () => {
-      const threshold = 150;
-      return viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < threshold;
-    };
-    const scrollToBottom = () => {
-      viewport.scrollTop = viewport.scrollHeight;
-    };
-    const observer = new ResizeObserver(() => {
-      if (isNearBottom()) {
-        scrollToBottom();
-      }
-    });
-    observer.observe(viewport.firstElementChild || viewport);
-    scrollToBottom();
-    return () => observer.disconnect();
-  }, [activeChannel]);
+    // Use setTimeout to ensure DOM has updated before scrolling
+    setTimeout(() => {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'instant' as ScrollBehavior });
+    }, 0);
+  }, []);
 
+  // Scroll to bottom on channel switch (including DMs)
+  useEffect(() => {
+    scrollToBottom();
+    // Also scroll after a short delay to catch async history loads
+    const t = setTimeout(scrollToBottom, 100);
+    const t2 = setTimeout(scrollToBottom, 300);
+    return () => { clearTimeout(t); clearTimeout(t2); };
+  }, [activeChannel, scrollToBottom]);
+
+  // Scroll to bottom when content size changes (new messages, images loading, etc.)
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const threshold = 150;
-    const isNearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < threshold;
-    if (isNearBottom) {
-      viewport.scrollTop = viewport.scrollHeight;
-    }
-  }, [messages]);
+    const observer = new ResizeObserver(() => {
+      scrollToBottom();
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [scrollToBottom]);
+
+  // Scroll to bottom on any new message (sent or received)
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
 
   const filteredMessages = messages.filter((msg) => msg.roomId === activeChannel);
 
@@ -887,7 +891,8 @@ function ChatScreen({
     onTyping(activeChannel, false);
     setEmojiOpened(false);
     setMentionIndex(-1);
-  }, [input, isDm, dms, username, activeChannel, onSendMessage, onSendPrivateMessage, onTyping]);
+    requestAnimationFrame(() => scrollToBottom());
+  }, [input, isDm, dms, username, activeChannel, onSendMessage, onSendPrivateMessage, onTyping, scrollToBottom]);
 
   const startRecording = useCallback(async () => {
     try {
