@@ -2,5 +2,5 @@
 cd "$(dirname "$0")"
 npm run build --prefix backend
 npm run build --prefix frontend
-pm2 delete all 2>/dev/null
+pm2 delete chatty 2>/dev/null
 pm2 start ecosystem.prod.config.cjs
