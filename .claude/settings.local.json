@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(pm2 logs:*)",
+      "Bash(pm2 delete:*)",
+      "Bash(bash:*)",
+      "Bash(npm run:*)",
+      "Bash(pm2 restart:*)",
+      "Bash(chmod +x:*)",
+      "Bash(mv dev.sh dev)",
+      "Bash(mv prod.sh prod)"
+    ]
+  }
+}

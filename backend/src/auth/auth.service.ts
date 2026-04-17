@@ -21,6 +21,7 @@ export class AuthService {
   async register(
     username: string,
     password: string,
+    rememberMe = true,
   ): Promise<{ accessToken: string; username: string }> {
     const existing = await this.userRepo.findOne({ where: { username } });
     if (existing) {
@@ -29,16 +30,17 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = this.userRepo.create({ username, password: hashedPassword });
     await this.userRepo.save(user);
-    const accessToken = this.jwtService.sign({
-      userId: user.id,
-      username: user.username,
-    });
+    const accessToken = this.jwtService.sign(
+      { userId: user.id, username: user.username },
+      { expiresIn: rememberMe ? '7d' : '1h' },
+    );
     return { accessToken, username: user.username };
   }
 
   async login(
     username: string,
     password: string,
+    rememberMe = true,
   ): Promise<{ accessToken: string; username: string }> {
     const user = await this.userRepo.findOne({ where: { username } });
     if (!user) {
@@ -48,10 +50,10 @@ export class AuthService {
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    const accessToken = this.jwtService.sign({
-      userId: user.id,
-      username: user.username,
-    });
+    const accessToken = this.jwtService.sign(
+      { userId: user.id, username: user.username },
+      { expiresIn: rememberMe ? '7d' : '1h' },
+    );
     return { accessToken, username: user.username };
   }
 

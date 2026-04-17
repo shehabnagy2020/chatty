@@ -4,10 +4,13 @@ export interface ChatMessage {
   content: string;
   sender: string;
   timestamp: number;
-  type?: 'text' | 'voice' | 'callLog' | 'image';
+  type?: 'text' | 'voice' | 'callLog' | 'image' | 'file' | 'location';
   duration?: number;
   callStatus?: 'ended' | 'missed' | 'rejected';
   to?: string;
+  fileName?: string;
+  fileType?: string;
+  reactions?: Record<string, string[]>;
 }
 
 export interface UserListEvent {
@@ -88,4 +91,9 @@ export interface AuthResponse {
 
 export interface AuthError {
   message: string;
+}
+
+export interface ReactionUpdateEvent {
+  messageId: string;
+  reactions: Record<string, string[]>;
 }

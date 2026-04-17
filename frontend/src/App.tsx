@@ -28,6 +28,7 @@ import {
   Alert,
   Transition,
   Checkbox,
+  Menu,
 } from '@mantine/core';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import type { ChatMessage, RoomInfo, PrivateMessageEvent } from './types';
@@ -36,6 +37,8 @@ import { useVoiceChat } from './hooks/useVoiceChat';
 import type { CallLogData } from './hooks/useVoiceChat';
 import { useNotifications } from './hooks/useNotifications';
 import { useAuth } from './hooks/useAuth';
+
+const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
 function getDmRoomId(a: string, b: string) {
   return `dm:${[a, b].sort().join('-')}`;
@@ -133,6 +136,125 @@ function CallLogBubble({ callStatus, duration }: { callStatus: 'ended' | 'missed
   );
 }
 
+function FileMessageBubble({ fileData, fileName, isOwn }: { fileData: string; fileName: string; isOwn: boolean }) {
+  return (
+    <Group gap="xs" wrap="nowrap" align="center">
+      <Text size="xl">📄</Text>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <Text size="sm" fw={500} truncate>{fileName}</Text>
+      </div>
+      <a href={fileData} download={fileName} style={{ textDecoration: 'none' }}>
+        <ActionIcon variant="subtle" color={isOwn ? 'violet.2' : 'violet'} size="sm" radius="xl">
+          ⬇
+        </ActionIcon>
+      </a>
+    </Group>
+  );
+}
+
+function LocationMessageBubble({ content, isOwn }: { content: string; isOwn: boolean }) {
+  let lat = 0;
+  let lng = 0;
+  try {
+    const parsed = JSON.parse(content);
+    lat = parsed.lat;
+    lng = parsed.lng;
+  } catch {
+    return <Text size="sm">Invalid location</Text>;
+  }
+  const mapUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  return (
+    <a href={mapUrl} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+      <Paper bg={isOwn ? 'violet.8' : 'dark.4'} radius="md" p="sm" style={{ cursor: 'pointer' }}>
+        <Group gap="xs" wrap="nowrap">
+          <Text size="xl">📍</Text>
+          <div>
+            <Text size="sm" fw={500} c={isOwn ? 'white' : undefined}>Shared Location</Text>
+            <Text size="xs" c="dimmed">{lat.toFixed(4)}, {lng.toFixed(4)}</Text>
+          </div>
+        </Group>
+      </Paper>
+    </a>
+  );
+}
+
+function MentionText({ content, onlineUsers }: { content: string; onlineUsers: string[] }) {
+  const mentionRegex = /@\w+/g;
+  const mentions = content.match(mentionRegex) || [];
+  if (mentions.length === 0) {
+    return <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>;
+  }
+  // Split by mentions, render each part
+  const parts = content.split(mentionRegex);
+  const elements: React.ReactNode[] = [];
+  parts.forEach((part, i) => {
+    if (part) {
+      elements.push(
+        <ReactMarkdown key={`text-${i}`} remarkPlugins={[remarkGfm]}>{part}</ReactMarkdown>
+      );
+    }
+    if (i < mentions.length) {
+      const mentionName = mentions[i].slice(1);
+      const isValid = onlineUsers.includes(mentionName);
+      elements.push(
+        <Text
+          key={`mention-${i}`}
+          component="span"
+          c={isValid ? 'violet.3' : undefined}
+          fw={isValid ? 600 : undefined}
+          bg={isValid ? 'rgba(124,58,237,0.15)' : undefined}
+          px={2}
+          py={0}
+          style={{ borderRadius: 4, cursor: isValid ? 'pointer' : undefined, display: 'inline' }}
+        >
+          {mentions[i]}
+        </Text>
+      );
+    }
+  });
+  return <>{elements}</>;
+}
+
+function ReactionPills({
+  reactions,
+  username,
+  onToggle,
+}: {
+  reactions: Record<string, string[]> | undefined;
+  username: string;
+  onToggle: (emoji: string) => void;
+}) {
+  if (!reactions || Object.keys(reactions).length === 0) return null;
+  return (
+    <Group gap={4} mt={4} wrap="wrap">
+      {Object.entries(reactions).map(([emoji, users]) => {
+        if (users.length === 0) return null;
+        const hasReacted = users.includes(username);
+        return (
+          <Paper
+            key={emoji}
+            radius="xl"
+            px="xs"
+            py={1}
+            style={{
+              cursor: 'pointer',
+              background: hasReacted ? 'rgba(124,58,237,0.3)' : 'var(--mantine-color-dark-4)',
+              border: hasReacted ? '1px solid rgba(124,58,237,0.5)' : '1px solid transparent',
+              transition: 'all 0.15s',
+            }}
+            onClick={() => onToggle(emoji)}
+          >
+            <Group gap={3} wrap="nowrap">
+              <Text size="xs">{emoji}</Text>
+              <Text size="xs" c="dimmed">{users.length}</Text>
+            </Group>
+          </Paper>
+        );
+      })}
+    </Group>
+  );
+}
+
 function AuthScreen({ onLogin, onRegister, loading, error, setError }: {
   onLogin: (username: string, password: string, remember: boolean) => Promise<boolean>;
   onRegister: (username: string, password: string, remember: boolean) => Promise<boolean>;
@@ -146,7 +268,6 @@ function AuthScreen({ onLogin, onRegister, loading, error, setError }: {
   const [rememberMe, setRememberMe] = useState(true);
 
   const handleSubmit = async () => {
-    // Re-read values from DOM in case autofill didn't trigger React onChange
     const usernameInput = document.getElementById('auth-username') as HTMLInputElement | null;
     const passwordInput = document.getElementById('auth-password') as HTMLInputElement | null;
     const u = (usernameInput?.value || username).trim();
@@ -212,15 +333,13 @@ function AuthScreen({ onLogin, onRegister, loading, error, setError }: {
             })}
           />
           </form>
-          {mode === 'login' && (
-            <Checkbox
-              label="Remember me"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.currentTarget.checked)}
-              color="violet"
-              size="sm"
-            />
-          )}
+          <Checkbox
+            label="Remember me"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.currentTarget.checked)}
+            color="violet"
+            size="sm"
+          />
           <Button
             fullWidth size="lg"
             variant="gradient"
@@ -423,6 +542,27 @@ function CreateRoomModal({ opened, onClose, onCreate }: { opened: boolean; onClo
   );
 }
 
+function VoicePreviewModal({ opened, onClose, audioData, duration, onSend }: {
+  opened: boolean;
+  onClose: () => void;
+  audioData: string;
+  duration: number;
+  onSend: () => void;
+}) {
+  return (
+    <Modal opened={opened} onClose={onClose} title="Voice Message Preview" centered radius="xl">
+      <Stack>
+        <VoiceMessageBubble audioData={audioData} duration={duration} isOwn={true} />
+        <Text size="sm" c="dimmed" ta="center">Duration: {formatDuration(duration)}</Text>
+        <Group grow>
+          <Button variant="outline" color="red" radius="xl" onClick={onClose}>Cancel</Button>
+          <Button variant="gradient" gradient={{ from: 'violet', to: 'grape', deg: 135 }} radius="xl" onClick={() => { onSend(); onClose(); }}>Send</Button>
+        </Group>
+      </Stack>
+    </Modal>
+  );
+}
+
 function ChatScreen({
   username,
   messages,
@@ -441,6 +581,11 @@ function ChatScreen({
   onSendCallLog,
   onSendImage,
   onSendPrivateImage,
+  onSendFile,
+  onSendPrivateFile,
+  onSendLocation,
+  onSendPrivateLocation,
+  onToggleReaction,
   onTyping,
   onLogout,
   voiceChat,
@@ -467,6 +612,11 @@ function ChatScreen({
   onSendCallLog: (to: string, callStatus: 'ended' | 'missed' | 'rejected', duration: number) => void;
   onSendImage: (roomId: string, image: string) => void;
   onSendPrivateImage: (to: string, image: string) => void;
+  onSendFile: (roomId: string, file: string, fileName: string, fileType: string) => void;
+  onSendPrivateFile: (to: string, file: string, fileName: string, fileType: string) => void;
+  onSendLocation: (roomId: string, lat: number, lng: number) => void;
+  onSendPrivateLocation: (to: string, lat: number, lng: number) => void;
+  onToggleReaction: (messageId: number, emoji: string) => void;
   onTyping: (roomId: string, isTyping: boolean) => void;
   onLogout: () => void;
   voiceChat: ReturnType<typeof useVoiceChat>;
@@ -483,11 +633,15 @@ function ChatScreen({
   const [createRoomOpened, { open: openCreateRoom, close: closeCreateRoom }] = useDisclosure(false);
   const [recording, setRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [voicePreview, setVoicePreview] = useState<{ audioData: string; duration: number } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(-1);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recordingDurationRef = useRef(0);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingVoiceRef = useRef<{ audioData: string; duration: number } | null>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [dms, setDms] = useState<Set<string>>(new Set(initialDmList));
@@ -504,6 +658,17 @@ function ChatScreen({
     prevDmListRef.current = initialDmList;
     setDms(new Set(initialDmList));
   }
+
+  // Mention detection: find if the cursor is after an @mention pattern
+  const mentionSuggestions = (() => {
+    const atIdx = input.lastIndexOf('@');
+    if (atIdx === -1) return [];
+    const afterAt = input.slice(atIdx + 1);
+    if (afterAt.includes(' ')) return [];
+    const query = afterAt.toLowerCase();
+    return onlineUsers.filter(u => u !== username && u.toLowerCase().startsWith(query)).slice(0, 5);
+  })();
+  const showMentions = mentionSuggestions.length > 0 && mentionIndex >= 0;
 
   useEffect(() => {
     onMessageRef.current = (msg: ChatMessage) => {
@@ -587,20 +752,71 @@ function ChatScreen({
   const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) return;
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result as string;
-      if (isDm) {
-        const dmUser = [...dms].find(u => getDmRoomId(username, u) === activeChannel);
-        if (dmUser) onSendPrivateImage(dmUser, base64);
+      if (file.type.startsWith('image/')) {
+        if (isDm) {
+          const dmUser = [...dms].find(u => getDmRoomId(username, u) === activeChannel);
+          if (dmUser) onSendPrivateImage(dmUser, base64);
+        } else {
+          onSendImage(activeChannel, base64);
+        }
       } else {
-        onSendImage(activeChannel, base64);
+        if (isDm) {
+          const dmUser = [...dms].find(u => getDmRoomId(username, u) === activeChannel);
+          if (dmUser) onSendPrivateFile(dmUser, base64, file.name, file.type);
+        } else {
+          onSendFile(activeChannel, base64, file.name, file.type);
+        }
       }
     };
     reader.readAsDataURL(file);
     e.target.value = '';
-  }, [isDm, dms, username, activeChannel, onSendImage, onSendPrivateImage]);
+  }, [isDm, dms, username, activeChannel, onSendImage, onSendPrivateImage, onSendFile, onSendPrivateFile]);
+
+  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      if (file.type.startsWith('image/')) {
+        if (isDm) {
+          const dmUser = [...dms].find(u => getDmRoomId(username, u) === activeChannel);
+          if (dmUser) onSendPrivateImage(dmUser, base64);
+        } else {
+          onSendImage(activeChannel, base64);
+        }
+      } else {
+        if (isDm) {
+          const dmUser = [...dms].find(u => getDmRoomId(username, u) === activeChannel);
+          if (dmUser) onSendPrivateFile(dmUser, base64, file.name, file.type);
+        } else {
+          onSendFile(activeChannel, base64, file.name, file.type);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }, [isDm, dms, username, activeChannel, onSendImage, onSendPrivateImage, onSendFile, onSendPrivateFile]);
+
+  const handleSendLocation = useCallback(() => {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        if (isDm) {
+          const dmUser = [...dms].find(u => getDmRoomId(username, u) === activeChannel);
+          if (dmUser) onSendPrivateLocation(dmUser, latitude, longitude);
+        } else {
+          onSendLocation(activeChannel, latitude, longitude);
+        }
+      },
+      () => {},
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }, [isDm, dms, username, activeChannel, onSendLocation, onSendPrivateLocation]);
 
   const handleSelectRoom = (roomId: string) => {
     const prevChannel = activeChannelRef.current;
@@ -637,6 +853,7 @@ function ChatScreen({
 
   const handleInputChange = (value: string) => {
     setInput(value);
+    setMentionIndex(value.lastIndexOf('@'));
     if (value.length > 0) {
       onTyping(activeChannel, true);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -644,6 +861,17 @@ function ChatScreen({
     } else {
       onTyping(activeChannel, false);
     }
+  };
+
+  const selectMention = (mentionUser: string) => {
+    const atIdx = input.lastIndexOf('@');
+    if (atIdx === -1) return;
+    const newInput = input.slice(0, atIdx) + `@${mentionUser} `;
+    setInput(newInput);
+    setMentionIndex(-1);
+    onTyping(activeChannel, true);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => onTyping(activeChannel, false), 2000);
   };
 
   const handleSend = useCallback(() => {
@@ -658,6 +886,7 @@ function ChatScreen({
     setInput('');
     onTyping(activeChannel, false);
     setEmojiOpened(false);
+    setMentionIndex(-1);
   }, [input, isDm, dms, username, activeChannel, onSendMessage, onSendPrivateMessage, onTyping]);
 
   const startRecording = useCallback(async () => {
@@ -678,12 +907,8 @@ function ChatScreen({
         reader.onload = () => {
           const base64 = reader.result as string;
           const dur = recordingDurationRef.current;
-          if (isDm) {
-            const dmUser = [...dms].find(u => getDmRoomId(username, u) === activeChannel);
-            if (dmUser) onSendPrivateVoiceMessage(dmUser, base64, dur);
-          } else {
-            onSendVoiceMessage(activeChannel, base64, dur);
-          }
+          pendingVoiceRef.current = { audioData: base64, duration: dur };
+          setVoicePreview({ audioData: base64, duration: dur });
         };
         reader.readAsDataURL(blob);
       };
@@ -699,7 +924,7 @@ function ChatScreen({
     } catch {
       setRecording(false);
     }
-  }, [isDm, dms, username, activeChannel, onSendVoiceMessage, onSendPrivateVoiceMessage]);
+  }, []);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
@@ -712,6 +937,23 @@ function ChatScreen({
     setRecording(false);
   }, []);
 
+  const sendPendingVoice = useCallback(() => {
+    if (!pendingVoiceRef.current) return;
+    const { audioData, duration } = pendingVoiceRef.current;
+    pendingVoiceRef.current = null;
+    if (isDm) {
+      const dmUser = [...dms].find(u => getDmRoomId(username, u) === activeChannel);
+      if (dmUser) onSendPrivateVoiceMessage(dmUser, audioData, duration);
+    } else {
+      onSendVoiceMessage(activeChannel, audioData, duration);
+    }
+  }, [isDm, dms, username, activeChannel, onSendVoiceMessage, onSendPrivateVoiceMessage]);
+
+  const cancelPendingVoice = useCallback(() => {
+    pendingVoiceRef.current = null;
+    setVoicePreview(null);
+  }, []);
+
   const handleEmojiClick = (emojiData: EmojiClickData) => {
     setInput(prev => prev + emojiData.emoji);
     onTyping(activeChannel, true);
@@ -720,6 +962,17 @@ function ChatScreen({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showMentions && mentionSuggestions.length > 0) {
+      if (e.key === 'Tab' || e.key === 'Enter') {
+        e.preventDefault();
+        selectMention(mentionSuggestions[0]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setMentionIndex(-1);
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -875,6 +1128,9 @@ function ChatScreen({
                 const isOwn = msg.sender === username;
                 const isVoice = msg.type === 'voice';
                 const isCallLog = msg.type === 'callLog';
+                const isFile = msg.type === 'file';
+                const isLocation = msg.type === 'location';
+                const isImage = msg.type === 'image';
                 if (isCallLog) {
                   const callTarget = isOwn ? msg.to || '' : msg.sender;
                   const callLabel = isOwn
@@ -907,61 +1163,115 @@ function ChatScreen({
                         {msg.sender.charAt(0).toUpperCase()}
                       </Avatar>
                     )}
-                    <Paper
-                      shadow="xs"
-                      radius={isOwn ? 'xl 4px xl xl' : '4px xl xl xl'}
-                      bg={isOwn ? 'violet' : 'dark.5'}
-                      p="sm"
-                      style={{
-                        maxWidth: isMobile ? '82%' : '65%',
-                        transition: 'transform 0.15s ease',
-                      }}
-                    >
-                      <Group gap="xs" wrap="nowrap">
-                        <Text
-                          size="xs"
-                          fw={600}
-                          c={isOwn ? 'violet.1' : 'violet.4'}
-                          lineClamp={1}
-                          style={{ cursor: isOwn ? 'default' : 'pointer' }}
-                          onClick={() => { if (!isOwn) handleSelectDm(msg.sender); }}
+                    <Box style={{ maxWidth: isMobile ? '82%' : '65%', position: 'relative' }}>
+                      <div
+                        style={{ position: 'relative' }}
+                        onMouseEnter={(e) => { const el = e.currentTarget.querySelector('.msg-reactions-hover') as HTMLElement | null; if (el) el.style.opacity = '1'; }}
+                        onMouseLeave={(e) => { const el = e.currentTarget.querySelector('.msg-reactions-hover') as HTMLElement | null; if (el) el.style.opacity = '0'; }}
+                      >
+                        <div
+                          className="msg-reactions-hover"
+                          style={{
+                            position: 'absolute',
+                            top: -28,
+                            [isOwn ? 'right' : 'left']: 4,
+                            zIndex: 10,
+                            opacity: 0,
+                            transition: 'opacity 0.15s',
+                            pointerEvents: 'none',
+                          }}
                         >
-                          {msg.sender}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          {formatTime(msg.timestamp)}
-                        </Text>
-                      </Group>
-                      {isVoice ? (
-                        <Box mt={4}>
-                          <VoiceMessageBubble
-                            audioData={msg.content}
-                            duration={msg.duration || 0}
-                            isOwn={isOwn}
-                          />
-                        </Box>
-                      ) : msg.type === 'image' ? (
-                        <Box mt={4}>
-                          <img
-                            src={msg.content}
-                            alt="Shared image"
-                            style={{
-                              maxWidth: '100%',
-                              maxHeight: 300,
-                              borderRadius: 8,
-                              display: 'block',
-                              cursor: 'pointer',
-                            }}
-                            loading="lazy"
-                            onClick={() => setFullscreenImage(msg.content)}
-                          />
-                        </Box>
-                      ) : (
-                        <Box size="sm" c={isOwn ? 'white' : undefined} className="chat-markdown" style={{ wordBreak: 'break-word' }}>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                        </Box>
-                      )}
-                    </Paper>
+                          <Paper radius="xl" shadow="sm" bg="dark.6" style={{ padding: '2px 4px', pointerEvents: 'auto' }}>
+                            <Group gap={2} wrap="nowrap">
+                              {REACTION_EMOJIS.map((emoji) => (
+                                <ActionIcon
+                                  key={emoji}
+                                  variant="subtle"
+                                  size="sm"
+                                  color="gray"
+                                  radius="xl"
+                                  onClick={() => onToggleReaction(Number(msg.id), emoji)}
+                                  style={{ fontSize: 14 }}
+                                                >
+                                  {emoji}
+                                </ActionIcon>
+                              ))}
+                            </Group>
+                          </Paper>
+                        </div>
+                      <Paper
+                        shadow="xs"
+                        radius={isOwn ? 'xl 4px xl xl' : '4px xl xl xl'}
+                        bg={isOwn ? 'violet' : 'dark.5'}
+                        p="sm"
+                        style={{
+                          transition: 'transform 0.15s ease',
+                        }}
+                      >
+                        <Group gap="xs" wrap="nowrap">
+                            <Text
+                              size="xs"
+                              fw={600}
+                              c={isOwn ? 'violet.1' : 'violet.4'}
+                              lineClamp={1}
+                              style={{ cursor: isOwn ? 'default' : 'pointer' }}
+                              onClick={() => { if (!isOwn) handleSelectDm(msg.sender); }}
+                            >
+                              {msg.sender}
+                            </Text>
+                            <Text size="xs" c="dimmed">
+                              {formatTime(msg.timestamp)}
+                            </Text>
+                          </Group>
+                        {isVoice ? (
+                          <Box mt={4}>
+                            <VoiceMessageBubble
+                              audioData={msg.content}
+                              duration={msg.duration || 0}
+                              isOwn={isOwn}
+                            />
+                          </Box>
+                        ) : isImage ? (
+                          <Box mt={4}>
+                            <img
+                              src={msg.content}
+                              alt="Shared image"
+                              style={{
+                                maxWidth: '100%',
+                                maxHeight: 300,
+                                borderRadius: 8,
+                                display: 'block',
+                                cursor: 'pointer',
+                              }}
+                              loading="lazy"
+                              onClick={() => setFullscreenImage(msg.content)}
+                            />
+                          </Box>
+                        ) : isFile ? (
+                          <Box mt={4}>
+                            <FileMessageBubble
+                              fileData={msg.content}
+                              fileName={msg.fileName || 'file'}
+                              isOwn={isOwn}
+                            />
+                          </Box>
+                        ) : isLocation ? (
+                          <Box mt={4}>
+                            <LocationMessageBubble content={msg.content} isOwn={isOwn} />
+                          </Box>
+                        ) : (
+                          <Box size="sm" c={isOwn ? 'white' : undefined} className="chat-markdown" style={{ wordBreak: 'break-word' }}>
+                            <MentionText content={msg.content} onlineUsers={onlineUsers} />
+                          </Box>
+                        )}
+                      </Paper>
+                      </div>
+                      <ReactionPills
+                        reactions={msg.reactions}
+                        username={username}
+                        onToggle={(emoji) => onToggleReaction(Number(msg.id), emoji)}
+                      />
+                    </Box>
                   </Group>
                 );
               })}
@@ -1063,6 +1373,13 @@ function ChatScreen({
             </Stack>
           </Modal>
         )}
+        <VoicePreviewModal
+          opened={voicePreview !== null}
+          onClose={cancelPendingVoice}
+          audioData={voicePreview?.audioData || ''}
+          duration={voicePreview?.duration || 0}
+          onSend={sendPendingVoice}
+        />
         <Group style={{ maxWidth: 900, margin: '0 auto', width: '100%' }} p="xs" gap="xs">
           {recording ? (
             <>
@@ -1088,83 +1405,136 @@ function ChatScreen({
                   <input
                     ref={imageInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,video/*"
                     style={{ display: 'none' }}
                     onChange={handleImageUpload}
                   />
-                  <Popover opened={emojiOpened} onChange={setEmojiOpened} position="top-start" withArrow shadow="md">
-                    <Popover.Target>
-                      <ActionIcon variant="subtle" color="violet" size="lg" onClick={() => setEmojiOpened(o => !o)} style={{ transition: 'transform 0.2s' }}>
-                        😊
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    style={{ display: 'none' }}
+                    onChange={handleFileUpload}
+                  />
+                  <Menu shadow="md" position="top-start">
+                    <Menu.Target>
+                      <ActionIcon variant="subtle" color="violet" size="lg" style={{ transition: 'transform 0.2s' }}>
+                        +
                       </ActionIcon>
-                    </Popover.Target>
-                    <Popover.Dropdown p={0} style={{ background: 'var(--mantine-color-dark-7)' }}>
-                      <EmojiPicker
-                        onEmojiClick={handleEmojiClick}
-                        theme={"dark" as unknown as undefined}
-                        width={isMobile ? 280 : 320}
-                        height={isMobile ? 350 : 400}
-                        searchDisabled
-                        skinTonesDisabled
-                        previewConfig={{ showPreview: false }}
-                      />
-                    </Popover.Dropdown>
-                  </Popover>
-                  <ActionIcon
-                    variant="subtle"
-                    color="violet"
-                    size="lg"
-                    onClick={() => imageInputRef.current?.click()}
-                    disabled={recording}
-                    title="Send image"
-                    style={{ transition: 'transform 0.2s' }}
-                  >
-                    🖼
-                  </ActionIcon>
-                  <ActionIcon
-                    variant="subtle"
-                    color="violet"
-                    size="lg"
-                    onClick={startRecording}
-                    disabled={recording}
-                    title="Voice message"
-                    style={{ transition: 'transform 0.2s' }}
-                  >
-                    🎤
-                  </ActionIcon>
+                    </Menu.Target>
+                    <Menu.Dropdown style={{ background: 'var(--mantine-color-dark-7)', borderRadius: 12 }}>
+                      <Menu.Item leftSection="📷" onClick={() => imageInputRef.current?.click()}>
+                        Photo / Video
+                      </Menu.Item>
+                      <Menu.Item leftSection="📎" onClick={() => fileInputRef.current?.click()}>
+                        File
+                      </Menu.Item>
+                      <Menu.Item leftSection="📍" onClick={handleSendLocation}>
+                        Location
+                      </Menu.Item>
+                    </Menu.Dropdown>
+                  </Menu>
                 </>
               )}
-              <TextInput
-                placeholder={`Message ${isDm ? channelLabel || '' : `#${channelLabel}`}...`}
-                style={{ flex: 1 }}
-                size="sm"
-                value={input}
-                onChange={(e) => handleInputChange(e.currentTarget.value)}
-                onKeyDown={handleKeyDown}
-                radius="xl"
-                styles={(theme) => ({
-                  input: {
-                    background: theme.colors.dark[6],
-                    borderColor: theme.colors.dark[4],
-                    transition: 'border-color 0.2s, box-shadow 0.2s',
-                    '&:focus': {
-                      borderColor: theme.colors.violet[6],
-                      boxShadow: '0 0 0 2px rgba(124, 58, 237, 0.2)',
+              <Box style={{ flex: 1, position: 'relative' }}>
+                {showMentions && (
+                  <Paper
+                    shadow="md"
+                    radius="md"
+                    bg="dark.6"
+                    style={{
+                      position: 'absolute',
+                      bottom: '100%',
+                      left: 0,
+                      zIndex: 200,
+                      minWidth: 160,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <Stack gap={2} p="xs">
+                      {mentionSuggestions.map((u) => (
+                        <Group
+                          key={u}
+                          gap="xs"
+                          px="xs"
+                          py={4}
+                          style={{ borderRadius: 6, cursor: 'pointer' }}
+                          onClick={() => selectMention(u)}
+                          className="mention-item"
+                        >
+                          <Avatar size="xs" radius="xl" color="violet">{u.charAt(0).toUpperCase()}</Avatar>
+                          <Text size="sm">{u}</Text>
+                        </Group>
+                      ))}
+                    </Stack>
+                  </Paper>
+                )}
+                <TextInput
+                  placeholder={`Message ${isDm ? channelLabel || '' : `#${channelLabel}`}...`}
+                  style={{ flex: 1 }}
+                  size="sm"
+                  value={input}
+                  onChange={(e) => handleInputChange(e.currentTarget.value)}
+                  onKeyDown={handleKeyDown}
+                  radius="xl"
+                  leftSection={
+                    <Popover opened={emojiOpened} onChange={setEmojiOpened} position="top-start" withArrow shadow="md">
+                      <Popover.Target>
+                        <div
+                          onClick={() => setEmojiOpened(o => !o)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: 22,
+                            height: 22,
+                            borderRadius: 6,
+                            background: 'var(--mantine-color-violet-8)',
+                            border: '1px solid var(--mantine-color-violet-6)',
+                            cursor: 'pointer',
+                            transition: 'background 0.15s, transform 0.15s',
+                            fontSize: 12,
+                            lineHeight: 1,
+                          }}
+                        >
+                          <span role="img" aria-label="emoji">😀</span>
+                        </div>
+                      </Popover.Target>
+                      <Popover.Dropdown p={0} style={{ background: 'var(--mantine-color-dark-7)' }}>
+                        <EmojiPicker
+                          onEmojiClick={handleEmojiClick}
+                          theme={"dark" as unknown as undefined}
+                          width={isMobile ? 280 : 320}
+                          height={isMobile ? 350 : 400}
+                          searchDisabled
+                          skinTonesDisabled
+                          previewConfig={{ showPreview: false }}
+                        />
+                      </Popover.Dropdown>
+                    </Popover>
+                  }
+                  styles={(theme) => ({
+                    input: {
+                      background: theme.colors.dark[6],
+                      borderColor: theme.colors.dark[4],
+                      transition: 'border-color 0.2s, box-shadow 0.2s',
+                      '&:focus': {
+                        borderColor: theme.colors.violet[6],
+                        boxShadow: '0 0 0 2px rgba(124, 58, 237, 0.2)',
+                      },
                     },
-                  },
-                })}
-              />
+                  })}
+                />
+              </Box>
               <Button
                 variant="gradient"
                 gradient={{ from: 'violet', to: 'grape', deg: 135 }}
                 size="sm"
-                disabled={!input.trim()}
-                onClick={handleSend}
+                onClick={input.trim() ? handleSend : (recording ? stopRecording : startRecording)}
                 px="md"
                 radius="xl"
-                style={{ transition: 'transform 0.15s, opacity 0.15s' }}
+                style={{ transition: 'transform 0.15s, opacity 0.15s', userSelect: 'none' }}
               >
-                Send
+                {input.trim() ? 'Send' : recording ? '⏹ Stop' : '🎤'}
               </Button>
             </>
           )}
@@ -1221,7 +1591,9 @@ function App() {
     messages, username: chatUsername, onlineUsers, rooms, typingUsers, dmList,
     joinRoom, createRoom, leaveRoom, sendMessage,
     sendPrivateMessage, setTyping, sendVoiceMessage, sendPrivateVoiceMessage,
-    sendCallLog, sendImage, sendPrivateImage, onMessageRef, onPrivateMessageRef, getDmHistory, unread, setActiveChannel: setChatActiveChannel,
+    sendCallLog, sendImage, sendPrivateImage,
+    sendFile, sendPrivateFile, sendLocation, sendPrivateLocation, toggleReaction,
+    onMessageRef, onPrivateMessageRef, getDmHistory, unread, setActiveChannel: setChatActiveChannel,
   } = useChat(socket, authUsername || '');
 
   const voiceChat = useVoiceChat(socket, onlineUsers);
@@ -1267,6 +1639,11 @@ function App() {
       onSendCallLog={sendCallLog}
       onSendImage={sendImage}
       onSendPrivateImage={sendPrivateImage}
+      onSendFile={sendFile}
+      onSendPrivateFile={sendPrivateFile}
+      onSendLocation={sendLocation}
+      onSendPrivateLocation={sendPrivateLocation}
+      onToggleReaction={toggleReaction}
       onTyping={setTyping}
       onLogout={handleLogout}
       voiceChat={voiceChat}

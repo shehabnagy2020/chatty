@@ -31,6 +31,15 @@ export class Message {
   @Column({ type: 'varchar', length: 20, nullable: true })
   callStatus: string | null;
 
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  fileName: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  fileType: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  reactions: string | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

@@ -1,22 +1,16 @@
 module.exports = {
   apps: [
     {
-      name: 'chatty-backend',
+      name: 'backend',
       cwd: './backend',
-      script: 'npm',
-      args: 'run start:dev',
-      env: {
-        NODE_ENV: 'development',
-      },
+      script: 'node',
+      args: 'dist/main.js',
     },
     {
-      name: 'chatty-frontend',
+      name: 'frontend',
       cwd: './frontend',
-      script: 'npm',
-      args: 'run dev',
-      env: {
-        NODE_ENV: 'development',
-      },
+      script: 'node',
+      args: './node_modules/vite/bin/vite.js --host',
     },
   ],
 };

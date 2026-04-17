@@ -21,6 +21,8 @@ export class ChatService {
     type?: string;
     duration?: number;
     callStatus?: string;
+    fileName?: string;
+    fileType?: string;
   }): Promise<Message> {
     const msg = new Message();
     msg.roomId = data.roomId;
@@ -30,6 +32,8 @@ export class ChatService {
     msg.type = data.type || 'text';
     msg.duration = data.duration || 0;
     msg.callStatus = data.callStatus || null;
+    msg.fileName = data.fileName || null;
+    msg.fileType = data.fileType || null;
     return this.messageRepo.save(msg);
   }
 
@@ -92,5 +96,43 @@ export class ChatService {
 
   async deleteRoom(roomId: string): Promise<void> {
     await this.roomRepo.delete({ roomId });
+  }
+
+  async toggleReaction(
+    messageId: number,
+    username: string,
+    emoji: string,
+  ): Promise<{ reactions: Record<string, string[]>; roomId: string } | null> {
+    const msg = await this.messageRepo.findOne({ where: { id: messageId } });
+    if (!msg) return null;
+
+    let reactions: Record<string, string[]> = {};
+    if (msg.reactions) {
+      try {
+        reactions = JSON.parse(msg.reactions);
+      } catch {
+        reactions = {};
+      }
+    }
+
+    const users = reactions[emoji] || [];
+    const idx = users.indexOf(username);
+    if (idx >= 0) {
+      users.splice(idx, 1);
+      if (users.length === 0) {
+        delete reactions[emoji];
+      } else {
+        reactions[emoji] = users;
+      }
+    } else {
+      reactions[emoji] = [...users, username];
+    }
+
+    msg.reactions = Object.keys(reactions).length > 0
+      ? JSON.stringify(reactions)
+      : null;
+    await this.messageRepo.save(msg);
+
+    return { reactions, roomId: msg.roomId };
   }
 }

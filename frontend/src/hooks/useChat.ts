@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { useEffect, useState, useCallback, useRef } from 'react';
-import type { ChatMessage, UserListEvent, TypingEvent, RoomListEvent, PrivateMessageEvent, MessageHistoryEvent, DmListEvent } from '../types';
+import type { ChatMessage, UserListEvent, TypingEvent, RoomListEvent, PrivateMessageEvent, MessageHistoryEvent, DmListEvent, ReactionUpdateEvent } from '../types';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || '';
 
@@ -103,6 +103,11 @@ function useChat(socket: Socket | null, initialUsername: string) {
     const onDmList = (data: DmListEvent) => {
       setDmList(data.dms);
     };
+    const onReactionUpdate = (data: ReactionUpdateEvent) => {
+      setMessages(prev => prev.map(m =>
+        m.id === data.messageId ? { ...m, reactions: data.reactions } : m
+      ));
+    };
     const onAuthError = () => {
       localStorage.removeItem('chatty_token');
       localStorage.removeItem('chatty_username');
@@ -118,6 +123,7 @@ function useChat(socket: Socket | null, initialUsername: string) {
     socket.on('privateMessage', onPrivateMessage);
     socket.on('typing', onTyping);
     socket.on('dmList', onDmList);
+    socket.on('reactionUpdate', onReactionUpdate);
     socket.on('authError', onAuthError);
 
     socket.emit('joinChat');
@@ -130,6 +136,7 @@ function useChat(socket: Socket | null, initialUsername: string) {
       socket.off('privateMessage', onPrivateMessage);
       socket.off('typing', onTyping);
       socket.off('dmList', onDmList);
+      socket.off('reactionUpdate', onReactionUpdate);
       socket.off('authError', onAuthError);
     };
   }, [socket, incrementUnread]);
@@ -178,6 +185,26 @@ function useChat(socket: Socket | null, initialUsername: string) {
     socket?.emit('privateImage', { to, image });
   }, [socket]);
 
+  const sendFile = useCallback((roomId: string, file: string, fileName: string, fileType: string) => {
+    socket?.emit('file', { roomId, file, fileName, fileType });
+  }, [socket]);
+
+  const sendPrivateFile = useCallback((to: string, file: string, fileName: string, fileType: string) => {
+    socket?.emit('privateFile', { to, file, fileName, fileType });
+  }, [socket]);
+
+  const sendLocation = useCallback((roomId: string, lat: number, lng: number) => {
+    socket?.emit('location', { roomId, lat, lng });
+  }, [socket]);
+
+  const sendPrivateLocation = useCallback((to: string, lat: number, lng: number) => {
+    socket?.emit('privateLocation', { to, lat, lng });
+  }, [socket]);
+
+  const toggleReaction = useCallback((messageId: number, emoji: string) => {
+    socket?.emit('react', { messageId, emoji });
+  }, [socket]);
+
   const getDmHistory = useCallback((otherUser: string) => {
     socket?.emit('getDmHistory', { username: otherUser });
   }, [socket]);
@@ -202,6 +229,11 @@ function useChat(socket: Socket | null, initialUsername: string) {
     sendCallLog,
     sendImage,
     sendPrivateImage,
+    sendFile,
+    sendPrivateFile,
+    sendLocation,
+    sendPrivateLocation,
+    toggleReaction,
     onMessageRef,
     onPrivateMessageRef,
     getDmHistory,

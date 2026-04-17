@@ -18,10 +18,13 @@ interface ChatMessage {
   content: string;
   sender: string;
   timestamp: number;
-  type?: 'text' | 'voice' | 'callLog' | 'image';
+  type?: 'text' | 'voice' | 'callLog' | 'image' | 'file' | 'location';
   duration?: number;
   callStatus?: 'ended' | 'missed' | 'rejected';
   to?: string;
+  fileName?: string;
+  fileType?: string;
+  reactions?: Record<string, string[]>;
 }
 
 interface VoiceMessagePayload {
@@ -44,6 +47,32 @@ interface ImageMessagePayload {
 interface PrivateImageMessagePayload {
   to: string;
   image: string;
+}
+
+interface FileMessagePayload {
+  roomId: string;
+  file: string;
+  fileName: string;
+  fileType: string;
+}
+
+interface PrivateFileMessagePayload {
+  to: string;
+  file: string;
+  fileName: string;
+  fileType: string;
+}
+
+interface LocationMessagePayload {
+  roomId: string;
+  lat: number;
+  lng: number;
+}
+
+interface PrivateLocationMessagePayload {
+  to: string;
+  lat: number;
+  lng: number;
 }
 
 interface RoomInfo {
@@ -69,13 +98,13 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
 
   private getOnlineUsers(): string[] {
-    const users: string[] = [];
+    const seen = new Set<string>();
     for (const socket of this.server.sockets.sockets.values()) {
       if (socket.data.joined && socket.data.username) {
-        users.push(socket.data.username as string);
+        seen.add(socket.data.username as string);
       }
     }
-    return users;
+    return [...seen];
   }
 
   private getRoomList(): RoomInfo[] {
@@ -104,18 +133,33 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     type: string;
     duration: number;
     callStatus: string | null;
+    fileName: string | null;
+    fileType: string | null;
+    reactions: string | null;
     createdAt: Date;
-  }): ChatMessage => ({
-    id: String(row.id),
-    roomId: row.roomId,
-    content: row.content,
-    sender: row.sender,
-    timestamp: new Date(row.createdAt).getTime(),
-    type: (row.type as ChatMessage['type']) || undefined,
-    duration: row.duration || undefined,
-    callStatus: (row.callStatus as ChatMessage['callStatus']) || undefined,
-    to: row.recipient || undefined,
-  });
+  }): ChatMessage => {
+    const msg: ChatMessage = {
+      id: String(row.id),
+      roomId: row.roomId,
+      content: row.content,
+      sender: row.sender,
+      timestamp: new Date(row.createdAt).getTime(),
+      type: (row.type as ChatMessage['type']) || undefined,
+      duration: row.duration || undefined,
+      callStatus: (row.callStatus as ChatMessage['callStatus']) || undefined,
+      to: row.recipient || undefined,
+      fileName: row.fileName || undefined,
+      fileType: row.fileType || undefined,
+    };
+    if (row.reactions) {
+      try {
+        msg.reactions = JSON.parse(row.reactions);
+      } catch {
+        msg.reactions = {};
+      }
+    }
+    return msg;
+  };
 
   handleConnection(client: Socket) {
     const token = client.handshake.auth?.token || client.handshake.query?.token;
@@ -128,17 +172,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const payload = this.authService.validateToken(token);
     if (!payload) {
       client.emit('authError', { message: 'Invalid or expired token' });
-      client.disconnect();
-      return;
-    }
-
-    const isUsernameTaken = Array.from(
-      this.server.sockets.sockets.values(),
-    ).some((s) => s.data.username === payload.username && s.id !== client.id);
-    if (isUsernameTaken) {
-      client.emit('authError', {
-        message: 'This account is already connected from another tab',
-      });
       client.disconnect();
       return;
     }
@@ -423,6 +456,102 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     targetSocket.emit('privateMessage', message);
     client.emit('privateMessage', message);
+  }
+
+  @SubscribeMessage('file')
+  async handleFile(client: Socket, payload: FileMessagePayload) {
+    const sender = client.data.username as string;
+    const saved = await this.chatService.saveMessage({
+      roomId: payload.roomId,
+      content: payload.file,
+      sender,
+      type: 'file',
+      fileName: payload.fileName,
+      fileType: payload.fileType,
+    });
+    const message: ChatMessage = this.formatMessage(saved);
+    this.server.to(payload.roomId).emit('message', message);
+  }
+
+  @SubscribeMessage('privateFile')
+  async handlePrivateFile(client: Socket, payload: PrivateFileMessagePayload) {
+    const targetSocket = this.findSocketByUsername(payload.to);
+    if (!targetSocket) return;
+
+    const sender = client.data.username as string;
+    const dmRoomId = `dm:${[sender, payload.to].sort().join('-')}`;
+    const saved = await this.chatService.saveMessage({
+      roomId: dmRoomId,
+      content: payload.file,
+      sender,
+      recipient: payload.to,
+      type: 'file',
+      fileName: payload.fileName,
+      fileType: payload.fileType,
+    });
+    const message: ChatMessage = this.formatMessage(saved);
+    message.to = payload.to;
+
+    targetSocket.emit('privateMessage', message);
+    client.emit('privateMessage', message);
+  }
+
+  @SubscribeMessage('location')
+  async handleLocation(client: Socket, payload: LocationMessagePayload) {
+    const sender = client.data.username as string;
+    const saved = await this.chatService.saveMessage({
+      roomId: payload.roomId,
+      content: JSON.stringify({ lat: payload.lat, lng: payload.lng }),
+      sender,
+      type: 'location',
+    });
+    const message: ChatMessage = this.formatMessage(saved);
+    this.server.to(payload.roomId).emit('message', message);
+  }
+
+  @SubscribeMessage('privateLocation')
+  async handlePrivateLocation(
+    client: Socket,
+    payload: PrivateLocationMessagePayload,
+  ) {
+    const targetSocket = this.findSocketByUsername(payload.to);
+    if (!targetSocket) return;
+
+    const sender = client.data.username as string;
+    const dmRoomId = `dm:${[sender, payload.to].sort().join('-')}`;
+    const saved = await this.chatService.saveMessage({
+      roomId: dmRoomId,
+      content: JSON.stringify({ lat: payload.lat, lng: payload.lng }),
+      sender,
+      recipient: payload.to,
+      type: 'location',
+    });
+    const message: ChatMessage = this.formatMessage(saved);
+    message.to = payload.to;
+
+    targetSocket.emit('privateMessage', message);
+    client.emit('privateMessage', message);
+  }
+
+  @SubscribeMessage('react')
+  async handleReact(
+    client: Socket,
+    payload: { messageId: number; emoji: string },
+  ) {
+    const username = client.data.username as string;
+    const result = await this.chatService.toggleReaction(
+      payload.messageId,
+      username,
+      payload.emoji,
+    );
+    if (!result) return;
+
+    const reactionUpdate = {
+      messageId: String(payload.messageId),
+      reactions: result.reactions,
+    };
+
+    this.server.to(result.roomId).emit('reactionUpdate', reactionUpdate);
   }
 
   @SubscribeMessage('callLog')
