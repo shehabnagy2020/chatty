@@ -37,6 +37,7 @@ import { useVoiceChat } from './hooks/useVoiceChat';
 import type { CallLogData } from './hooks/useVoiceChat';
 import { useNotifications } from './hooks/useNotifications';
 import { useAuth } from './hooks/useAuth';
+import { demoMessages, demoRooms, demoOnlineUsers, demoDmList, demoResponses } from './demo/data';
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
@@ -255,12 +256,13 @@ function ReactionPills({
   );
 }
 
-function AuthScreen({ onLogin, onRegister, loading, error, setError }: {
+function AuthScreen({ onLogin, onRegister, loading, error, setError, onDemo }: {
   onLogin: (username: string, password: string, remember: boolean) => Promise<boolean>;
   onRegister: (username: string, password: string, remember: boolean) => Promise<boolean>;
   loading: boolean;
   error: string | null;
   setError: (err: string | null) => void;
+  onDemo?: () => void;
 }) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState('');
@@ -358,6 +360,18 @@ function AuthScreen({ onLogin, onRegister, loading, error, setError }: {
               ? "Don't have an account? Switch to Sign Up above"
               : 'Already have an account? Switch to Sign In above'}
           </Text>
+          {onDemo && (
+            <Button
+              fullWidth
+              size="lg"
+              variant="outline"
+              color="violet"
+              radius="xl"
+              onClick={onDemo}
+            >
+              Try Demo
+            </Button>
+          )}
         </Stack>
       </Paper>
     </Container>
@@ -594,6 +608,7 @@ function ChatScreen({
   initialDmList,
   getDmHistory,
   unread,
+  demoMode,
 }: {
   username: string;
   messages: ChatMessage[];
@@ -625,6 +640,7 @@ function ChatScreen({
   initialDmList: string[];
   getDmHistory: (username: string) => void;
   unread: Map<string, number>;
+  demoMode?: boolean;
 }) {
   const isMobile = useMediaQuery('(max-width: 48em)');
   const [mobileNavOpened, { toggle: toggleMobileNav, close: closeMobileNav }] = useDisclosure(false);
@@ -1022,6 +1038,7 @@ function ChatScreen({
           <Text fw={700} size="lg" variant="gradient" gradient={{ from: 'violet', to: 'grape', deg: 135 }}>
             Chatty
           </Text>
+          {demoMode && <Badge size="sm" color="orange" variant="light" radius="sm">Demo</Badge>}
         </Group>
         <Group gap="xs">
           <Badge variant="light" color="violet" size="sm" radius="xl" leftSection={<Indicator size={6} color="green" inline />}>
@@ -1591,8 +1608,9 @@ function ConnectingScreen() {
 }
 
 function App() {
+  const [demoMode, setDemoMode] = useState(false);
   const { token, username: authUsername, logout, register, login, loading: authLoading, error: authError, setError: setAuthError } = useAuth();
-  const { socket, connected } = useSocket(token);
+  const { socket, connected } = useSocket(demoMode ? null : token);
   const {
     messages, username: chatUsername, onlineUsers, rooms, typingUsers, dmList,
     joinRoom, createRoom, leaveRoom, sendMessage,
@@ -1600,30 +1618,143 @@ function App() {
     sendCallLog, sendImage, sendPrivateImage,
     sendFile, sendPrivateFile, sendLocation, sendPrivateLocation, toggleReaction,
     onMessageRef, onPrivateMessageRef, getDmHistory, unread, setActiveChannel: setChatActiveChannel,
-  } = useChat(socket, authUsername || '');
+  } = useChat(demoMode ? null : socket, demoMode ? 'you' : (authUsername || ''));
 
-  const voiceChat = useVoiceChat(socket, onlineUsers);
+  const voiceChat = useVoiceChat(demoMode ? null : socket, demoMode ? demoOnlineUsers : onlineUsers);
 
-  const [activeChannel, setActiveChannelLocal] = useState('general');
+  // Demo mode local state
+  const [demoMessages_state, setDemoMessages] = useState<ChatMessage[]>(demoMessages);
+  const [demoActiveChannel, setDemoActiveChannel] = useState('general');
+  const demoMessageRef = useRef<((msg: ChatMessage) => void) | null>(null);
+  const demoPrivateMessageRef = useRef<((msg: PrivateMessageEvent) => void) | null>(null);
+  const demoUnreadRef = useRef(new Map<string, number>());
+
+  const activeChannel = demoMode ? demoActiveChannel : (function() { return 'general'; })();
+  const [activeChannelState, setActiveChannelLocal] = useState('general');
 
   const setActiveChannel = useCallback((channel: string) => {
-    setActiveChannelLocal(channel);
-    setChatActiveChannel(channel);
-  }, [setChatActiveChannel]);
+    if (demoMode) {
+      setDemoActiveChannel(channel);
+    } else {
+      setActiveChannelLocal(channel);
+      setChatActiveChannel(channel);
+    }
+  }, [demoMode, setChatActiveChannel]);
+
+  const handleDemoSend = useCallback((roomId: string, content: string) => {
+    const msg: ChatMessage = {
+      id: `demo-${Date.now()}`,
+      roomId,
+      content,
+      sender: 'you',
+      timestamp: Date.now(),
+    };
+    setDemoMessages(prev => [...prev, msg]);
+
+    // Simulate a reply after a delay
+    setTimeout(() => {
+      const responder = demoOnlineUsers[Math.floor(Math.random() * demoOnlineUsers.length)];
+      const response = demoResponses[Math.floor(Math.random() * demoResponses.length)];
+      const reply: ChatMessage = {
+        id: `demo-${Date.now()}-r`,
+        roomId,
+        content: response,
+        sender: responder,
+        timestamp: Date.now(),
+      };
+      setDemoMessages(prev => [...prev, reply]);
+    }, 1000 + Math.random() * 2000);
+  }, []);
+
+  const handleDemoPrivateSend = useCallback((to: string, content: string) => {
+    const msg: ChatMessage = {
+      id: `demo-${Date.now()}`,
+      roomId: `dm:${[to, 'you'].sort().join('-')}`,
+      content,
+      sender: 'you',
+      timestamp: Date.now(),
+      to,
+    } as PrivateMessageEvent;
+    setDemoMessages(prev => [...prev, msg]);
+
+    setTimeout(() => {
+      const response = demoResponses[Math.floor(Math.random() * demoResponses.length)];
+      const reply: ChatMessage = {
+        id: `demo-${Date.now()}-r`,
+        roomId: `dm:${[to, 'you'].sort().join('-')}`,
+        content: response,
+        sender: to,
+        timestamp: Date.now(),
+        to: 'you',
+      };
+      setDemoMessages(prev => [...prev, reply]);
+    }, 1500 + Math.random() * 2000);
+  }, []);
 
   const handleLogout = useCallback(() => {
+    if (demoMode) {
+      setDemoMode(false);
+      setDemoMessages(demoMessages);
+      setDemoActiveChannel('general');
+      return;
+    }
     if (socket) {
       socket.disconnect();
     }
     logout();
-  }, [socket, logout]);
+  }, [demoMode, socket, logout]);
 
-  if (!token) {
-    return <AuthScreen onLogin={login} onRegister={register} loading={authLoading} error={authError} setError={setAuthError} />;
+  const enterDemo = useCallback(() => {
+    setDemoMode(true);
+  }, []);
+
+  if (!token && !demoMode) {
+    return <AuthScreen onLogin={login} onRegister={register} loading={authLoading} error={authError} setError={setAuthError} onDemo={enterDemo} />;
   }
 
-  if (!connected && token) {
+  if (!demoMode && !connected && token) {
     return <ConnectingScreen />;
+  }
+
+  if (demoMode) {
+    const demoEmptyRef = { current: null } as React.MutableRefObject<((msg: ChatMessage) => void) | null>;
+    const demoPrivateEmptyRef = { current: null } as React.MutableRefObject<((msg: PrivateMessageEvent) => void) | null>;
+
+    return (
+      <ChatScreen
+        username="you"
+        messages={demoMessages_state}
+        onlineUsers={demoOnlineUsers}
+        rooms={demoRooms}
+        typingUsers={new Map()}
+        activeChannel={demoActiveChannel}
+        setActiveChannel={setActiveChannel}
+        onJoinRoom={() => {}}
+        onLeaveRoom={() => {}}
+        onCreateRoom={() => {}}
+        onSendMessage={handleDemoSend}
+        onSendPrivateMessage={handleDemoPrivateSend}
+        onSendVoiceMessage={() => {}}
+        onSendPrivateVoiceMessage={() => {}}
+        onSendCallLog={() => {}}
+        onSendImage={() => {}}
+        onSendPrivateImage={() => {}}
+        onSendFile={() => {}}
+        onSendPrivateFile={() => {}}
+        onSendLocation={() => {}}
+        onSendPrivateLocation={() => {}}
+        onToggleReaction={() => {}}
+        onTyping={() => {}}
+        onLogout={handleLogout}
+        voiceChat={voiceChat}
+        onMessageRef={demoEmptyRef}
+        onPrivateMessageRef={demoPrivateEmptyRef}
+        initialDmList={demoDmList}
+        getDmHistory={() => {}}
+        unread={new Map()}
+        demoMode
+      />
+    );
   }
 
   return (
@@ -1633,7 +1764,7 @@ function App() {
       onlineUsers={onlineUsers}
       rooms={rooms}
       typingUsers={typingUsers}
-      activeChannel={activeChannel}
+      activeChannel={activeChannelState}
       setActiveChannel={setActiveChannel}
       onJoinRoom={joinRoom}
       onLeaveRoom={leaveRoom}
