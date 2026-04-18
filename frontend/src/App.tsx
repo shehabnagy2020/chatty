@@ -1625,11 +1625,7 @@ function App() {
   // Demo mode local state
   const [demoMessages_state, setDemoMessages] = useState<ChatMessage[]>(demoMessages);
   const [demoActiveChannel, setDemoActiveChannel] = useState('general');
-  const demoMessageRef = useRef<((msg: ChatMessage) => void) | null>(null);
-  const demoPrivateMessageRef = useRef<((msg: PrivateMessageEvent) => void) | null>(null);
-  const demoUnreadRef = useRef(new Map<string, number>());
 
-  const activeChannel = demoMode ? demoActiveChannel : (function() { return 'general'; })();
   const [activeChannelState, setActiveChannelLocal] = useState('general');
 
   const setActiveChannel = useCallback((channel: string) => {
