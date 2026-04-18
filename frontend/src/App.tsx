@@ -1170,6 +1170,7 @@ function ChatScreen({
                     )}
                     <Box style={{ maxWidth: isMobile ? '82%' : '65%', position: 'relative' }}>
                       <div
+                        className="msg-reaction-wrapper"
                         style={{ position: 'relative' }}
                         onMouseEnter={(e) => { const el = e.currentTarget.querySelector('.msg-reactions-hover') as HTMLElement | null; if (el) el.style.opacity = '1'; }}
                         onMouseLeave={(e) => { const el = e.currentTarget.querySelector('.msg-reactions-hover') as HTMLElement | null; if (el) el.style.opacity = '0'; }}
@@ -1178,15 +1179,15 @@ function ChatScreen({
                           className="msg-reactions-hover"
                           style={{
                             position: 'absolute',
-                            top: -28,
-                            [isOwn ? 'right' : 'left']: 4,
-                            zIndex: 10,
+                            bottom: '100%',
+                            [isOwn ? 'right' : 'left']: 0,
+                            marginBottom: 4,
+                            zIndex: 100,
                             opacity: 0,
                             transition: 'opacity 0.15s',
-                            pointerEvents: 'none',
                           }}
                         >
-                          <Paper radius="xl" shadow="sm" bg="dark.6" style={{ padding: '2px 4px', pointerEvents: 'auto' }}>
+                          <Paper radius="xl" shadow="xl" bg="dark.6" style={{ padding: '2px 4px', border: '1px solid var(--mantine-color-dark-3)' }}>
                             <Group gap={2} wrap="nowrap">
                               {REACTION_EMOJIS.map((emoji) => (
                                 <ActionIcon
@@ -1196,8 +1197,8 @@ function ChatScreen({
                                   color="gray"
                                   radius="xl"
                                   onClick={() => onToggleReaction(Number(msg.id), emoji)}
-                                  style={{ fontSize: 14 }}
-                                                >
+                                  style={{ fontSize: 14, cursor: 'pointer', pointerEvents: 'auto' }}
+                                >
                                   {emoji}
                                 </ActionIcon>
                               ))}

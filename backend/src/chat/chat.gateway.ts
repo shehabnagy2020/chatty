@@ -551,7 +551,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       reactions: result.reactions,
     };
 
-    this.server.to(result.roomId).emit('reactionUpdate', reactionUpdate);
+    // Send to all in room INCLUDING the sender
+    this.server.in(result.roomId).emit('reactionUpdate', reactionUpdate);
   }
 
   @SubscribeMessage('callLog')

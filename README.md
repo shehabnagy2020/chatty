@@ -94,5 +94,28 @@ chatty/
 ├── prod                    # Build & production mode (PM2, backend serves all on :8000)
 ├── ecosystem.config.cjs    # PM2 dev config
 ├── ecosystem.prod.config.cjs # PM2 prod config
-└── AGENTS.md               # Detailed project memory
+└── CLAUDE.md               # Project memory for Claude
 ```
+
+## Deployment
+
+### Local Production
+```bash
+./prod  # Builds both, starts PM2 on port 8000
+```
+
+### Vercel Deployment (Hybrid Approach)
+Due to SQLite and WebSocket requirements, the recommended deployment is:
+
+1. **Frontend on Vercel**: Deploy `frontend/` as a static site
+2. **Backend on Railway/Render**: Deploy `backend/` with persistent storage
+
+#### Frontend (Vercel)
+1. Set build command: `npm run build`
+2. Set output directory: `dist`
+3. Set environment variable: `VITE_SERVER_URL=https://your-backend-url.com`
+
+#### Backend (Railway/Render)
+1. Set `PORT` environment variable
+2. Set `JWT_SECRET` to a secure random string
+3. Ensure SQLite database file is in a persistent volume
