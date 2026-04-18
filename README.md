@@ -2,6 +2,10 @@
 
 Real-time chat application with user authentication, voice calls, file sharing, reactions, and markdown support.
 
+## Video Tour
+
+<video src="./Chatty-Tour.mp4" controls></video>
+
 ## Features
 
 - **Authentication** — Sign up / sign in with username + password, JWT tokens, "Remember me" (7d) or session-only (1h)
