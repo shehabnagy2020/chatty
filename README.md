@@ -4,7 +4,7 @@ Real-time chat application with user authentication, voice calls, file sharing, 
 
 ## Video Tour
 
-https://github.com/shehabnagy2020/chatty/blob/master/Chatty-Tour.mp4
+https://github.com/shehabnagy2020/chatty/blob/master/chatty-tour.mp4
 
 ## Features
 
