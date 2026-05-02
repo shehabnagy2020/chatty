@@ -1608,7 +1608,7 @@ function ConnectingScreen() {
 }
 
 function App() {
-  const [demoMode, setDemoMode] = useState(false);
+  const [demoMode, setDemoMode] = useState(() => import.meta.env.VITE_DEMO_MODE === 'true');
   const { token, username: authUsername, logout, register, login, loading: authLoading, error: authError, setError: setAuthError } = useAuth();
   const { socket, connected } = useSocket(demoMode ? null : token);
   const {
